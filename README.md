@@ -18,6 +18,10 @@ Kelompok F06:
 - [DHCP](#dhcp)
 - [DNS](#dns)
 - [Nomor 1](#nomor-1)
+- [Nomor 2](#nomor-2)
+- [Nomor 3](#nomor-3)
+- [Nomor 4](#nomor-4)
+- [Nomor 5](#nomor-5)
 
 ### Prerequisite
 
@@ -210,3 +214,76 @@ Dibuatkan forwarder yang mengarah ke `192.168.122.1` supaya client dapat terhubu
 - [Daftar Isi](#daftar-isi)
 
 Agar topologi yang kalian buat dapat mengakses keluar, kalian diminta untuk mengkonfigurasi Aura menggunakan iptables, tetapi tidak ingin menggunakan MASQUERADE.
+
+Metode biasanya untuk mengakses internet dari NAT adalah menggunakan command `iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE -s 192.224.0.0/20` dimana semua paket yang mengarah keluar dari Aura didefinisikan sebagai berasal dari subnet `192.224.0.0` dengan netmask `/20`. MASQUERADE berguna dalam hal ini karena koneksi dari NAT ke Aura menggunakan IP dinamis, sehingga Aura tidak harus mengetahui IP yang diberikan dari NAT ke Aura terlebih dahulu untuk mendefinisikan setiap paket yang mengarah keluar.
+
+Alternatif dari MASQUERADE adalah SNAT yang biasanya digunakan jika koneksi ke NAT menggunakan IP statis. Karena koneksi NAT ke Aura menggunakan IP Dinamis / DHCP, maka diperlukan untuk mengambil IP yang diberi oleh NAT ke Aura menggunakan command berikut:
+```bash
+eth0=$(ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+```
+
+Command tersebut mengambil IP pada interface eth0 pada Aura yang terhubung dengan NAT, lalu difilter menggunakan grep untuk diambil bagian IP-nya saja. Setelah didapatkan, nilai IP disimpan dalam variabel eth0 itu dan dimasukkan ke command iptables berikut:
+```bash
+iptables -t nat -A POSTROUTING -o eth0 -j SNAT --to-source $eth0
+```
+
+Menggunakan IP eth0 yang didapatkan tadi, semua paket yang keluar dari eth0 di Aura akan diberi tujuan / `--to-source` yang sama agar dapat tersalurkan ke NAT.
+
+Pengetesan dilakukan di Aura dan di Richter sebagai berikut:
+![alt](images/no1a.png)
+![alt](images/no1b.png)
+
+### Nomor 2
+- [Daftar Isi](#daftar-isi)
+
+Kalian diminta untuk melakukan drop semua TCP dan UDP kecuali port 8080 pada TCP.
+
+Dapat menggunakan beberapa command berikut:
+```bash
+# Set default policies to DROP
+iptables -P INPUT DROP
+iptables -P FORWARD DROP
+iptables -P OUTPUT DROP
+
+# Allow incoming traffic on port 8080 TCP
+iptables -A INPUT -p tcp --dport 8080 -j ACCEPT
+```
+
+Tiga command pertama membuat default policy dari chain INPUT, FORWARD, dan OUTPUT supaya drop semua paket. 
+
+Lalu dengan menambahkan rule terakhir, dimana menggunakan `-A INPUT` untuk melakukan append atau penambahan pada chain INPUT. 
+
+Kriteria lain yang digunakan adalah hanya bekerja pada protokol TCP (`-p tcp`) dan port 8080 (`--dport 8080`) untuk menerima paket atau melakukan ACCEPT (`-j ACCEPT`).
+
+Berikut adalah hasil testing menggunakan command `nc -l -p 8080` di node Aura dan `nc 192.224.0.17 8080` di node lain.
+
+![alt](images/no2a.png)
+
+Untuk mengetes apakah port lain tidak bisa, tinggal diganti port saat melakukan netcat.
+
+![alt](images/no2b.png)
+
+### Nomor 3
+- [Daftar Isi](#daftar-isi)
+
+Kepala Suku North Area meminta kalian untuk membatasi DHCP dan DNS Server hanya dapat dilakukan ping oleh maksimal 3 device secara bersamaan, selebihnya akan di drop.
+
+Dapat menggunakan 2 command dibawah ini:
+```bash
+iptables -A INPUT -p icmp -m connlimit --connlimit-above 3 --connlimit-mask 0 -j DROP
+iptables -I INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+```
+
+Command pertama menggunakan matches / `-m` `connlimit` untuk membatasi jumlah koneksi yang menggunakan protokol ICMP (`-p icmp`) menjadi tidak lebih dari 3 koneksi (`--connlimit-above 3`). Ada juga `--connlimit-mask` yang diisikan dengan 0 supaya semua paket yang masuk difilter melalui rule ini.
+
+Command kedua menggunakan matches / `-m` `state` untuk melihat apakah koneksi yang dilihat adalah koneksi yang sudah memiliki status / `--state` `ESTABLISHED, RELATED` atau tidak. Jika iya, maka koneksi tetap akan dilanjutkan.
+
+Koneksi yang digunakan ping menggunakan protokol ICMP, jadi sudah sesuai dengan rule pertama, dan juga menggunakan status `ESTABLISHED, RELATED` juga sehingga akan dibolehkan rule kedua.
+
+Berikut hasil tes di 4 client dan Richter.
+![alt](images/no3.png)
+
+### Nomor 4
+- [Daftar Isi](#daftar-isi)
+
+Lakukan pembatasan sehingga koneksi SSH pada Web Server hanya dapat dilakukan oleh masyarakat yang berada pada GrobeForest.
