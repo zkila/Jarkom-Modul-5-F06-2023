@@ -22,6 +22,11 @@ Kelompok F06:
 - [Nomor 3](#nomor-3)
 - [Nomor 4](#nomor-4)
 - [Nomor 5](#nomor-5)
+- [Nomor 6](#nomor-6)
+- [Nomor 7](#nomor-7)
+- [Nomor 8](#nomor-8)
+- [Nomor 9](#nomor-9)
+- [Nomor 10](#nomor-10)
 
 ### Prerequisite
 
@@ -157,7 +162,7 @@ Perhitungan range pada setiap subnet menggunakan jumlah available IP yang didapa
 
 Setelah server DHCP sudah berjalan, bisa diinstall dan dikonfigurasikan DHCP relay pada setiap router di topologi ini.
 
-Contoh pada Fern, instalasi menggunakan command ``, lalu konfigurasikan sesuai dengan skrip dibawah saat diprompt saat instalasi.
+Contoh pada Fern, instalasi menggunakan command `apt-get install isc-dhcp-relay -y`, lalu konfigurasikan sesuai dengan skrip dibawah saat diprompt saat instalasi.
 
 ```conf
 # Defaults for isc-dhcp-relay initscript
@@ -213,7 +218,7 @@ Dibuatkan forwarder yang mengarah ke `192.168.122.1` supaya client dapat terhubu
 ### Nomor 1
 - [Daftar Isi](#daftar-isi)
 
-Agar topologi yang kalian buat dapat mengakses keluar, kalian diminta untuk mengkonfigurasi Aura menggunakan iptables, tetapi tidak ingin menggunakan MASQUERADE.
+**Agar topologi yang kalian buat dapat mengakses keluar, kalian diminta untuk mengkonfigurasi Aura menggunakan iptables, tetapi tidak ingin menggunakan MASQUERADE.**
 
 Metode biasanya untuk mengakses internet dari NAT adalah menggunakan command `iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE -s 192.224.0.0/20` dimana semua paket yang mengarah keluar dari Aura didefinisikan sebagai berasal dari subnet `192.224.0.0` dengan netmask `/20`. MASQUERADE berguna dalam hal ini karena koneksi dari NAT ke Aura menggunakan IP dinamis, sehingga Aura tidak harus mengetahui IP yang diberikan dari NAT ke Aura terlebih dahulu untuk mendefinisikan setiap paket yang mengarah keluar.
 
@@ -236,7 +241,7 @@ Pengetesan dilakukan di Aura dan di Richter sebagai berikut:
 ### Nomor 2
 - [Daftar Isi](#daftar-isi)
 
-Kalian diminta untuk melakukan drop semua TCP dan UDP kecuali port 8080 pada TCP.
+**Kalian diminta untuk melakukan drop semua TCP dan UDP kecuali port 8080 pada TCP.**
 
 Dapat menggunakan beberapa command berikut:
 ```bash
@@ -266,7 +271,7 @@ Untuk mengetes apakah port lain tidak bisa, tinggal diganti port saat melakukan 
 ### Nomor 3
 - [Daftar Isi](#daftar-isi)
 
-Kepala Suku North Area meminta kalian untuk membatasi DHCP dan DNS Server hanya dapat dilakukan ping oleh maksimal 3 device secara bersamaan, selebihnya akan di drop.
+**Kepala Suku North Area meminta kalian untuk membatasi DHCP dan DNS Server hanya dapat dilakukan ping oleh maksimal 3 device secara bersamaan, selebihnya akan di drop.**
 
 Dapat menggunakan 2 command dibawah ini:
 ```bash
@@ -286,4 +291,65 @@ Berikut hasil tes di 4 client dan Richter.
 ### Nomor 4
 - [Daftar Isi](#daftar-isi)
 
-Lakukan pembatasan sehingga koneksi SSH pada Web Server hanya dapat dilakukan oleh masyarakat yang berada pada GrobeForest.
+**Lakukan pembatasan sehingga koneksi SSH pada Web Server hanya dapat dilakukan oleh masyarakat yang berada pada GrobeForest.**
+
+Dapat menggunakan 2 command berikut ini:
+```bash
+iptables -A INPUT -p tcp --dport 22 -s 192.224.4.0/22 -j ACCEPT
+iptables -A INPUT -p tcp --dport 22 -j DROP
+```
+
+Karena koneksi SSH menggunakan TCP pada transport layernya, maka penggunaan rule iptables tersebut bisa menggunakan `-p tcp` untuk menarget koneksi protokol  TCP. 
+
+GrobeForest memiliki NID `192.224.4.0` dengan netmask `/22`. Maka dari itu bisa langsung dimasukkan ke rule dengan flag `-s` dan flag jump / `-j` `ACCEPT`.
+
+Koneksi lain yang tidak cocok dengan rule pertama tersebut akan di drop dengan rule kedua.
+
+Berikut adalah hasil testing di GrobeForest, LaubHills, dan Stark:
+
+![alt](images/no4a.png)
+![alt](images/no4b.png)
+
+### Nomor 5
+- [Daftar Isi](#daftar-isi)
+
+**Selain itu, akses menuju WebServer hanya diperbolehkan saat jam kerja yaitu Senin-Jumat pada pukul 08.00-16.00.**
+
+Dapat menggunakan command berikut:
+```bash
+iptables -A INPUT -m time --timestart 08:00 --timestop 16:00 --weekdays Mon,Tue,Wed,Thu,Fri -j ACCEPT
+iptables -A INPUT -j REJECT
+```
+
+Seperti biasa, paket yang di `ACCEPT` adalah paket yang sesuai dengan kriteria di rule pertama.
+
+Menggunakan matches `time` yang memiliki beberapa argumen yang sesuai dengan kebutuhan soal.
+- `--timestart 08:00`: Menandakan pada jam berapa rule mulai menandakan paket, yaitu jam 8 pagi.
+- `--timestop 16:00`: Menandakan pada jam berapa rule tidak menandakan paket lagi, yaitu jam 4 sore.
+- `--weekdays Mon,Tue,Wed,Thu,Fri`: menandakan pada hari apa saja rule menandakan paket, yaitu pada hari Senin sampai Kamis.
+
+Dites menggunakan command date `date --set="2023-12-16 20:00:00"` yang bisa dijalankan di client atau web server.
+
+Berikut adalah hasil tes:
+![alt](images/no5.png)
+
+### Nomor 6
+- [Daftar Isi](#daftar-isi)
+
+**Lalu, karena ternyata terdapat beberapa waktu di mana network administrator dari WebServer tidak bisa stand by, sehingga perlu ditambahkan rule bahwa akses pada hari Senin - Kamis pada jam 12.00 - 13.00 dilarang (istirahat maksi cuy) dan akses di hari Jumat pada jam 11.00 - 13.00 juga dilarang (maklum, Jumatan rek).**
+
+Bisa menggunakan 2 rule berikut:
+```bash
+iptables -A INPUT -m time --timestart 12:00 --timestop 13:00 --weekdays Mon,Tue,Wed,Thu -j DROP
+iptables -A INPUT -m time --timestart 11:00 --timestop 13:00 --weekdays Fri -j DROP
+```
+
+Sama seperti nomor sebelumnya, dengan perbedaan di operasi yang dilakukan pada hari Senin sampai Kamis (`--weekdays Mon,Tue,Wed,Thu`)pada jam 12 (`--timestart 12:00`) sampai jam 1 (`--timestop 13:00`) dan pada hari jumat (`--weekdays Fri`) pada hari jam 11 (`--timestart 11:00`) sampai jam 1 (`--timestop 13:00`) yang merupakan operasi DROP, bukan ACCEPT. Dua rule tersebut perlu ditempatkan di atas rule nomor sebelumnya karena sifat rules pada iptables yang memiliki urutan dilakukannya proses filter dengan cara topdown.
+
+Berikut adalah hasil testingnya:
+![alt](images/no6.png)
+
+### Nomor 7
+- [Daftar Isi](#daftar-isi)
+
+**Karena terdapat 2 WebServer, kalian diminta agar setiap client yang mengakses Sein dengan Port 80 akan didistribusikan secara bergantian pada Sein dan Stark secara berurutan dan request dari client yang mengakses Stark dengan port 443 akan didistribusikan secara bergantian pada Sein dan Stark secara berurutan.**
