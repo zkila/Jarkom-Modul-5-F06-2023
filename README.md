@@ -344,7 +344,7 @@ iptables -A INPUT -m time --timestart 12:00 --timestop 13:00 --weekdays Mon,Tue,
 iptables -A INPUT -m time --timestart 11:00 --timestop 13:00 --weekdays Fri -j DROP
 ```
 
-Sama seperti nomor sebelumnya, dengan perbedaan di operasi yang dilakukan pada hari Senin sampai Kamis (`--weekdays Mon,Tue,Wed,Thu`)pada jam 12 (`--timestart 12:00`) sampai jam 1 (`--timestop 13:00`) dan pada hari jumat (`--weekdays Fri`) pada hari jam 11 (`--timestart 11:00`) sampai jam 1 (`--timestop 13:00`) yang merupakan operasi DROP, bukan ACCEPT. Dua rule tersebut perlu ditempatkan di atas rule nomor sebelumnya karena sifat rules pada iptables yang memiliki urutan dilakukannya proses filter dengan cara topdown.
+Sama seperti nomor sebelumnya, dengan perbedaan di operasi yang dilakukan pada hari Senin sampai Kamis (`--weekdays Mon,Tue,Wed,Thu`)pada jam 12 (`--timestart 12:00`) sampai jam 1 (`--timestop 13:00`) dan pada hari jumat (`--weekdays Fri`) pada hari jam 11 (`--timestart 11:00`) sampai jam 1 (`--timestop 13:00`) yang merupakan operasi DROP, bukan ACCEPT. Dua rule tersebut perlu ditempatkan di atas rule nomor sebelumnya karena rules bersifat sekuensial dan berjalan dari rule paling atas ke bawah (topdown).
 
 Berikut adalah hasil testingnya:
 ![alt](images/no6.png)
