@@ -353,3 +353,111 @@ Berikut adalah hasil testingnya:
 - [Daftar Isi](#daftar-isi)
 
 **Karena terdapat 2 WebServer, kalian diminta agar setiap client yang mengakses Sein dengan Port 80 akan didistribusikan secara bergantian pada Sein dan Stark secara berurutan dan request dari client yang mengakses Stark dengan port 443 akan didistribusikan secara bergantian pada Sein dan Stark secara berurutan.**
+
+Menggunakan beberapa command dibawah ini:
+```bash
+# Heiter
+# distribute.sh
+
+iptables -t nat -F
+
+iptables -A PREROUTING -t nat -p tcp -d 192.224.4.2 --dport 80 -m statistic --mode nth --every 2 --packet 0  -j DNAT --to-destination 192.224.0.2:80
+iptables -A PREROUTING -t nat -p tcp -d 192.224.4.2 --dport 80 -m statistic --mode nth --every 2 --packet 1 -j DNAT --to-destination 192.224.4.2:80
+
+iptables -t nat -L
+
+iptables -F
+
+# Frieren
+# distribute.sh
+
+iptables -t nat -F
+
+iptables -A PREROUTING -t nat -p tcp -d 192.224.0.2 --dport 443 -m statistic --mode nth --every 2 --packet 0  -j DNAT --to-destination 192.224.0.2:443
+iptables -A PREROUTING -t nat -p tcp -d 192.224.0.2 --dport 443 -m statistic --mode nth --every 2 --packet 1 -j DNAT --to-destination 192.224.4.2:443
+
+iptables -t nat -L
+
+iptables -F
+```
+Rule ini membagi 2 setiap paket yang masuk dengan `-m statistic` yang menggunakan mode nth dimana setiap 2 paket yang masuk akan diredireksi ke webserver yang lain di port yang sama.
+
+**Kendala**
+
+Distribusi paket hanya bisa dilakukan lewat curl yang mengarah ke html yang disediakan, tidak bisa dilakukan lewat nc. Selain itu apabila melewati nc, juga hanya bisa dilakukan di port 443, port 80 tidak bisa.
+
+### Nomor 8 
+- [Daftar Isi](#daftar-isi)
+
+**Karena berbeda koalisi politik, maka subnet dengan masyarakat yang berada pada Revolte dilarang keras mengakses WebServer hingga masa pencoblosan pemilu kepala suku 2024 berakhir. Masa pemilu (hingga pemungutan dan penghitungan suara selesai) kepala suku bersamaan dengan masa pemilu Presiden dan Wakil Presiden Indonesia 2024.**
+
+Dengan menggunakan command dibawah:
+```bash
+iptables -A INPUT -s 192.224.0.10 -m time --datestart 2024-02-16T00:00:00 --datestop 2038-01-01T00:00:00 -j ACCEPT
+iptables -A INPUT -j DROP
+```
+
+Sama seperti nomor sebelumnya yang menggunakan matches `time`, hanya saja pada nomor ini dilihat source IP berasal dari mana. Apabila dari Revolte dengan IP `192.224.0.10`, maka rule ini akan menandakan paket tersebut.
+
+Argumen `--datestart 2024-02-16T00:00:00` digunakan untuk menandakan dari tanggal apa rule ini menarget paket. Sedangkan argumen `--datestop 2038-01-01T00:00:00` menandakan sampai tanggal apa rule ini berlaku. 
+
+Karena argumen `-j ACCEPT` digunakan, maka paket yang berasal dari Revolte akan diterima apabila dikirim pada jangka waktu setelah pemilu (15/2/2024) sampai batas akhir matches `time` bekerja (1/1/2038).
+
+Berikut adalah hasil testing:
+![alt](images/no8.png)
+
+### Nomor 9
+- [Daftar Isi](#daftar-isi)
+
+**Sadar akan adanya potensial saling serang antar kubu politik, maka WebServer harus dapat secara otomatis memblokir  alamat IP yang melakukan scanning port dalam jumlah banyak (maksimal 20 scan port) di dalam selang waktu 10 menit. 
+(clue: test dengan nmap)**
+
+Dapat menggunakan beberapa command berikut:
+```bash
+iptables -N portscan
+
+iptables -A INPUT -m recent --name portscan --update --seconds 600 --hitcount 20 -j DROP
+iptables -A FORWARD -m recent --name portscan --update --seconds 600 --hitcount 20 -j DROP
+
+iptables -A INPUT -m recent --name portscan --set -j ACCEPT
+iptables -A FORWARD -m recent --name portscan --set -j ACCEPT
+```
+
+Command `-N portscan` digunakan untuk membuat chain baru bernama portscan yang digunakan untuk mengelola aturan portscanning.
+
+Matches yang digunakan adalah `-m recent` dengan argumen `--update` untuk mengupdate informasi tentang paket. Lalu ada argumen `--seconds 600` dan `--hitcount 20` yang menyatakan jika ada 20 hit dalam durasi 600 detik / 10 menit, maka paket akan di drop. Rule ini ditambahkan ke chain INPUT dan FORWARD.
+
+Pada kedua command di akhir, matches yang digunakan tetap `recent` dengan argument `--set` untuk menetapkan informasi terkait paket baru. Rule ini menyatakan jika ada koneksi baru, maka paket dari koneksi tersebut boleh masuk karena sudah tidak termasuk serangan portscan lagi.
+
+Berikut adalah hasil testing dengan cara ping 23 kali ke Sein:
+![alt](images/no9.png)
+
+Dapat dilihat bahwa hanya 20 ping yang masuk, maka rules diatas sudah bekerja.
+
+**Kendala**
+
+Testing saat demo menggunakan nmap, dan saat menggunakan nmap hasilnya tidak sesuai. Filter portscan tidak terdeteksi di nmap.
+
+### Nomor 10
+- [Daftar Isi](#daftar-isi)
+
+**Karena kepala suku ingin tau paket apa saja yang di-drop, maka di setiap node server dan router ditambahkan logging paket yang di-drop dengan standard syslog level.**
+
+Menggunakan 2 command dibawah ini:
+```bash
+iptables -I INPUT -m recent --name portscan --update --seconds 600 --hitcount 20 -j LOG --log-prefix "Portscan detected: " --log-level 4
+
+iptables -I FORWARD -m recent --name portscan --update --seconds 600 --hitcount 20 -j LOG --log-prefix "Portscan detected: " --log-level 4
+```
+Menggunakan `-j LOG` untuk melakukan log pada paket yang sesuai dengan kriteria yang sudah ditetapkan sebagai portscan di nomor 9.
+
+Argumen `--log-prefix "Portscan detected: "` digunakan untuk menambah prefix di log. Argumen `--log-level 4` digunakan untuk mengarahkan tingkatan log menjadi level 4 yang masuk ke level `warning`.
+
+Dengan konfigurasi iptables tersebut, syslog di sistem juga harus dikonfigurasikan dengan menambahkan `kern.warning -/var/log/iptables.log` untuk mengarahkan kemana log yang bersifat warning di level kernel disimpan, yaitu di `iptables.log`
+
+Berikut adalah hasil soal tersebut:
+![alt](images/no10.png)
+
+**Kendala**
+
+Log masih belum bisa terekam.
